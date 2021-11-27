@@ -8,24 +8,24 @@ import (
 )
 
 func hello(w http.ResponseWriter, req *http.Request) {
-	log.Println("hello handler")
+	log.Println("hello handler", req.Method, req.Proto, req.URL)
 
-	fmt.Fprintf(w, "hello\n")
+	fmt.Fprintln(w, "hello")
 }
 
 func headers(w http.ResponseWriter, req *http.Request) {
 	log.Println("headers handler")
 
-	// Get keys from map.
+	// get keys
 	keys := []string{}
 	for key, _ := range req.Header {
 		keys = append(keys, key)
 	}
 
-	// Sort string keys.
+	// sort keys
 	sort.Strings(keys)
 
-	// Loop over sorted key-value pairs.
+	// print key and values in sorted order
 	for i := range keys {
 		key := keys[i]
 		value := req.Header[key]
