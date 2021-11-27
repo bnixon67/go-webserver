@@ -18,7 +18,7 @@ func headers(w http.ResponseWriter, req *http.Request) {
 
 	// get keys
 	keys := []string{}
-	for key, _ := range req.Header {
+	for key := range req.Header {
 		keys = append(keys, key)
 	}
 
