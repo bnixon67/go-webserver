@@ -7,18 +7,34 @@ import (
 	"sort"
 )
 
-func hello(w http.ResponseWriter, req *http.Request) {
-	log.Println("hello handler", req.Method, req.Proto, req.URL)
+func hello(w http.ResponseWriter, r *http.Request) {
+	log.Println("hello handler", r.Method, r.URL)
+
+	w.Header().Set("Cache-Control", "no-cache, no-store, must-revalidate")
 
 	fmt.Fprintln(w, "hello")
 }
 
-func headers(w http.ResponseWriter, req *http.Request) {
-	log.Println("headers handler")
+func root(w http.ResponseWriter, r *http.Request) {
+	log.Println("root handler", r.Method, r.URL)
 
-	// get keys
+	if r.URL.Path == "/" {
+		http.Redirect(w, r, "/hello", http.StatusMovedPermanently)
+		return
+	} else {
+		http.NotFound(w, r)
+		return
+	}
+}
+
+func headers(w http.ResponseWriter, r *http.Request) {
+	log.Println("headers handler", r.Method, r.URL)
+
+	w.Header().Set("Cache-Control", "no-cache, no-store, must-revalidate")
+
+	// get keys from map
 	keys := []string{}
-	for key := range req.Header {
+	for key, _ := range r.Header {
 		keys = append(keys, key)
 	}
 
@@ -28,13 +44,13 @@ func headers(w http.ResponseWriter, req *http.Request) {
 	// print key and values in sorted order
 	for i := range keys {
 		key := keys[i]
-		value := req.Header[key]
+		value := r.Header[key]
 		fmt.Fprintf(w, "%v: %v\n", key, value)
 	}
 }
 
 func main() {
-
+	http.HandleFunc("/", root)
 	http.HandleFunc("/hello", hello)
 	http.HandleFunc("/headers", headers)
 
