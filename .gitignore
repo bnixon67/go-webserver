@@ -1,2 +1,4 @@
 go-http-server
 nohup.out
+*.log
+*.service
