@@ -11,9 +11,24 @@ import (
 // Handler is responsible for handling HTTP requests.
 type Handler struct{}
 
+// Root handles the root ("/") route.
+func (h Handler) Root(w http.ResponseWriter, r *http.Request) {
+	log.Println("root handler", r.Method, r.URL)
+
+	if r.URL.Path == "/" {
+		http.Redirect(w, r, "/hello", http.StatusMovedPermanently)
+		return
+	} else {
+		http.NotFound(w, r)
+		return
+	}
+}
+
 // Hello responds with a simple "hello" message.
 func (h Handler) Hello(w http.ResponseWriter, r *http.Request) {
 	log.Printf("%v handler", r.URL.Path)
+
+	w.Header().Set("Cache-Control", "no-cache, no-store, must-revalidate")
 
 	fmt.Fprintln(w, "hello")
 }
@@ -67,6 +82,7 @@ func (h Handler) Request(w http.ResponseWriter, r *http.Request) {
 func main() {
 	handler := Handler{}
 
+	http.HandleFunc("/", handler.Root)
 	http.HandleFunc("/hello", handler.Hello)
 	http.HandleFunc("/headers", handler.Headers)
 	http.HandleFunc("/ip", handler.IP)
