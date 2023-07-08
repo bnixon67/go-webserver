@@ -15,20 +15,20 @@ import (
 // Handler is responsible for handling HTTP requests.
 type Handler struct{}
 
-// logHandler logs information about the request.
-func logHandler(r *http.Request) {
-	slog.Info("handler",
-		slog.Group("req",
+// logger is HTTP middleware to log the request.
+func logger(handler http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		slog.Info("request",
 			slog.String("method", r.Method),
 			slog.String("url", r.URL.String()),
-		),
-	)
+		)
+
+		handler.ServeHTTP(w, r)
+	})
 }
 
 // Root handles the root ("/") route.
 func (h Handler) Root(w http.ResponseWriter, r *http.Request) {
-	logHandler(r)
-
 	if r.URL.Path == "/" {
 		http.Redirect(w, r, "/hello", http.StatusMovedPermanently)
 		return
@@ -39,8 +39,6 @@ func (h Handler) Root(w http.ResponseWriter, r *http.Request) {
 
 // Hello responds with a simple "hello" message.
 func (h Handler) Hello(w http.ResponseWriter, r *http.Request) {
-	logHandler(r)
-
 	w.Header().Set("Cache-Control", "no-cache, no-store, must-revalidate")
 
 	fmt.Fprintln(w, "hello")
@@ -48,8 +46,6 @@ func (h Handler) Hello(w http.ResponseWriter, r *http.Request) {
 
 // Headers prints the headers of the request in sorted order.
 func (h Handler) Headers(w http.ResponseWriter, r *http.Request) {
-	logHandler(r)
-
 	// get header keys
 	keys := make([]string, 0, len(r.Header))
 	for key := range r.Header {
@@ -70,15 +66,20 @@ func (h Handler) Headers(w http.ResponseWriter, r *http.Request) {
 // Note: This may not be the actual remote IP if a proxy, load balancer,
 // or similar is used to route the request.
 func (h Handler) IP(w http.ResponseWriter, r *http.Request) {
-	logHandler(r)
-
 	fmt.Fprintf(w, "RemoteAddr: %v\n", r.RemoteAddr)
+
+	headers := []string{"X-Forwarded-For", "Cf-Connecting-Ip"}
+
+	for _, header := range headers {
+		val := r.Header.Get(header)
+		if val != "" {
+			fmt.Fprintf(w, "%s: %v\n", header, val)
+		}
+	}
 }
 
 // Request dumps the HTTP request details.
 func (h Handler) Request(w http.ResponseWriter, r *http.Request) {
-	logHandler(r)
-
 	b, err := httputil.DumpRequest(r, true)
 	if err != nil {
 		http.Error(w,
@@ -99,15 +100,17 @@ func main() {
 
 	var handler Handler
 
-	http.HandleFunc("/", handler.Root)
-	http.HandleFunc("/hello", handler.Hello)
-	http.HandleFunc("/headers", handler.Headers)
-	http.HandleFunc("/ip", handler.IP)
-	http.HandleFunc("/request", handler.Request)
+	mux := http.NewServeMux()
+
+	mux.Handle("/", logger(http.HandlerFunc(handler.Root)))
+	mux.Handle("/hello", logger(http.HandlerFunc(handler.Hello)))
+	mux.Handle("/headers", logger(http.HandlerFunc(handler.Headers)))
+	mux.Handle("/ip", logger(http.HandlerFunc(handler.IP)))
+	mux.Handle("/request", logger(http.HandlerFunc(handler.Request)))
 
 	slog.Info("listen and serve", slog.String("addr", *addr))
 
-	err := http.ListenAndServe(*addr, nil)
+	err := http.ListenAndServe(*addr, mux)
 	if err != nil {
 		slog.Error("ListenAndServe", "err", err)
 		os.Exit(1)
