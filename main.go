@@ -1,6 +1,8 @@
 package main
 
 import (
+	_ "embed"
+	"errors"
 	"flag"
 	"fmt"
 	"net/http"
@@ -18,7 +20,15 @@ type Handler struct{}
 // logger is HTTP middleware to log the request.
 func logger(handler http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// get real IP address if using Cloudflare or similar service
+		var ip string
+		ip = r.Header.Get("X-Real-IP")
+		if ip == "" {
+			ip = r.RemoteAddr
+		}
+
 		slog.Info("request",
+			slog.String("ip", ip),
 			slog.String("method", r.Method),
 			slog.String("url", r.URL.String()),
 		)
@@ -27,14 +37,18 @@ func logger(handler http.Handler) http.Handler {
 	})
 }
 
+//go:embed testdata/hello.html
+var helloHTML string
+
 // Root handles the root ("/") route.
 func (h Handler) Root(w http.ResponseWriter, r *http.Request) {
-	if r.URL.Path == "/" {
-		http.Redirect(w, r, "/hello", http.StatusMovedPermanently)
+	if r.URL.Path != "/" {
+		http.NotFound(w, r)
 		return
 	}
 
-	http.NotFound(w, r)
+	w.Header().Set("Content-Type", "text/html; charset=UTF-8")
+	fmt.Fprint(w, helloHTML)
 }
 
 // Hello responds with a simple "hello" message.
@@ -62,13 +76,18 @@ func (h Handler) Headers(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// IP responds with the remote IP address.
-// Note: This may not be the actual remote IP if a proxy, load balancer,
+// IP responds with the remote IP and common headers for the actual IP.
+// Note: RemoteAddr may not be the actual remote IP if a proxy, load balancer,
 // or similar is used to route the request.
 func (h Handler) IP(w http.ResponseWriter, r *http.Request) {
 	fmt.Fprintf(w, "RemoteAddr: %v\n", r.RemoteAddr)
 
-	headers := []string{"X-Forwarded-For", "Cf-Connecting-Ip"}
+	headers := []string{
+		"Cf-Connecting-Ip",
+		"X-Client-Ip",
+		"X-Forwarded-For",
+		"X-Real-Ip",
+	}
 
 	for _, header := range headers {
 		val := r.Header.Get(header)
@@ -108,11 +127,13 @@ func main() {
 	mux.Handle("/ip", logger(http.HandlerFunc(handler.IP)))
 	mux.Handle("/request", logger(http.HandlerFunc(handler.Request)))
 
-	slog.Info("listen and serve", slog.String("addr", *addr))
+	slog.Info("starting server", slog.String("addr", *addr))
 
 	err := http.ListenAndServe(*addr, mux)
-	if err != nil {
-		slog.Error("ListenAndServe", "err", err)
+	if errors.Is(err, http.ErrServerClosed) {
+		slog.Info("server closed")
+	} else if err != nil {
+		slog.Error("failed to start", "err", err)
 		os.Exit(1)
 	}
 }

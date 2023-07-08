@@ -1,12 +1,16 @@
 package main
 
 import (
+	_ "embed"
 	"net/http"
 	"net/http/httptest"
 	"sort"
 	"strings"
 	"testing"
 )
+
+//go:embed testdata/hello.html
+var helloHtml string
 
 func TestRootHandler(t *testing.T) {
 	handler := Handler{}
@@ -19,11 +23,10 @@ func TestRootHandler(t *testing.T) {
 		expectedLocation string
 	}{
 		{
-			name:             "Root path",
-			path:             "/",
-			expectedCode:     http.StatusMovedPermanently,
-			expectedBody:     "<a href=\"/hello\">Moved Permanently</a>.",
-			expectedLocation: "/hello",
+			name:         "Root path",
+			path:         "/",
+			expectedCode: http.StatusOK,
+			expectedBody: strings.TrimSpace(helloHtml),
 		},
 		{
 			name:         "Non-root path",
