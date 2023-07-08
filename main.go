@@ -18,7 +18,7 @@ import (
 type Handler struct{}
 
 // logger is HTTP middleware to log the request.
-func logger(handler http.Handler) http.Handler {
+func (h Handler) logger(handler http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		// get real IP address if using Cloudflare or similar service
 		var ip string
@@ -117,15 +117,15 @@ func main() {
 	addr := flag.String("addr", ":8080", "address (host:port) to listen on")
 	flag.Parse()
 
-	var handler Handler
+	var h Handler
 
 	mux := http.NewServeMux()
 
-	mux.Handle("/", logger(http.HandlerFunc(handler.Root)))
-	mux.Handle("/hello", logger(http.HandlerFunc(handler.Hello)))
-	mux.Handle("/headers", logger(http.HandlerFunc(handler.Headers)))
-	mux.Handle("/ip", logger(http.HandlerFunc(handler.IP)))
-	mux.Handle("/request", logger(http.HandlerFunc(handler.Request)))
+	mux.Handle("/", h.logger(http.HandlerFunc(h.Root)))
+	mux.Handle("/hello", h.logger(http.HandlerFunc(h.Hello)))
+	mux.Handle("/headers", h.logger(http.HandlerFunc(h.Headers)))
+	mux.Handle("/ip", h.logger(http.HandlerFunc(h.IP)))
+	mux.Handle("/request", h.logger(http.HandlerFunc(h.Request)))
 
 	slog.Info("starting server", slog.String("addr", *addr))
 
