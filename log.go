@@ -79,7 +79,7 @@ func InitLog(name, handlerType string, level slog.Level, addSource bool) error {
 		if err != nil {
 			return fmt.Errorf("InitLog: %w", err)
 		}
-		defer file.Close()
+		// do not defer file.Close() since the file must remain open
 		w = file
 	}
 
@@ -89,23 +89,18 @@ func InitLog(name, handlerType string, level slog.Level, addSource bool) error {
 		Level:     level,
 	}
 
-	// map to lookup handlers based on name
-	handlerFuncMap := map[string]func(io.Writer, *slog.HandlerOptions) slog.Handler{
-		"json": func(w io.Writer, opts *slog.HandlerOptions) slog.Handler {
-			return slog.NewJSONHandler(w, opts)
-		},
-		"text": func(w io.Writer, opts *slog.HandlerOptions) slog.Handler {
-			return slog.NewTextHandler(w, opts)
-		},
+	// configure handler
+	var handler slog.Handler
+	switch handlerType {
+	case "json":
+		handler = slog.NewJSONHandler(w, opts)
+	case "text":
+		handler = slog.NewTextHandler(w, opts)
+	default:
+		handler = slog.NewTextHandler(w, opts)
 	}
 
-	handlerFunc, found := handlerFuncMap[handlerType]
-	if !found {
-		// default to text
-		handlerFunc, _ = handlerFuncMap["text"]
-	}
-
-	logger := slog.New(handlerFunc(w, opts))
+	logger := slog.New(handler)
 	slog.SetDefault(logger)
 
 	slog.Info("InitLog",
