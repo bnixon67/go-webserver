@@ -1,139 +1,154 @@
+/*
+Copyright 2023 Bill Nixon
+
+Licensed under the Apache License, Version 2.0 (the "License"); you may not use
+this file except in compliance with the License.  You may obtain a copy of the
+License at http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software distributed
+under the License is distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR
+CONDITIONS OF ANY KIND, either express or implied.  See the License for the
+specific language governing permissions and limitations under the License.
+*/
 package main
 
 import (
-	_ "embed"
-	"errors"
+	"context"
 	"flag"
 	"fmt"
+	"log/slog"
+	"net"
 	"net/http"
-	"net/http/httputil"
 	"os"
-	"sort"
+	"os/signal"
+	"slices"
 	"strings"
-
-	"golang.org/x/exp/slog"
+	"time"
 )
 
-// Handler is responsible for handling HTTP requests.
-type Handler struct{}
+const (
+	EXIT_SERVER = 1
+	EXIT_USAGE  = 2
+	EXIT_LOG    = 3
+)
 
-// logger is HTTP middleware to log the request.
-func (h Handler) logger(handler http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		// get real IP address if using Cloudflare or similar service
-		var ip string
-		ip = r.Header.Get("X-Real-IP")
-		if ip == "" {
-			ip = r.RemoteAddr
-		}
-
-		slog.Info("request",
-			slog.String("ip", ip),
-			slog.String("method", r.Method),
-			slog.String("url", r.URL.String()),
-		)
-
-		handler.ServeHTTP(w, r)
-	})
+// ServerConfig holds configuration options for the HTTP server.
+type ServerConfig struct {
+	Addr         string
+	ReadTimeout  time.Duration
+	WriteTimeout time.Duration
+	IdleTimeout  time.Duration
 }
 
-//go:embed testdata/hello.html
-var helloHTML string
-
-// Root handles the root ("/") route.
-func (h Handler) Root(w http.ResponseWriter, r *http.Request) {
-	if r.URL.Path != "/" {
-		http.NotFound(w, r)
-		return
-	}
-
-	w.Header().Set("Content-Type", "text/html; charset=UTF-8")
-	fmt.Fprint(w, helloHTML)
-}
-
-// Hello responds with a simple "hello" message.
-func (h Handler) Hello(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Cache-Control", "no-cache, no-store, must-revalidate")
-
-	fmt.Fprintln(w, "hello")
-}
-
-// Headers prints the headers of the request in sorted order.
-func (h Handler) Headers(w http.ResponseWriter, r *http.Request) {
-	// get header keys
-	keys := make([]string, 0, len(r.Header))
-	for key := range r.Header {
-		keys = append(keys, key)
-	}
-
-	// sort headers
-	sort.Strings(keys)
-
-	// print key-value pairs
-	for _, key := range keys {
-		value := strings.Join(r.Header[key], ", ")
-		fmt.Fprintf(w, "%v: %v\n", key, value)
+// createServer creates an HTTP server with the specified config and handler.
+func createServer(config ServerConfig, handler http.Handler) *http.Server {
+	return &http.Server{
+		Addr:         config.Addr,
+		Handler:      handler,
+		ReadTimeout:  config.ReadTimeout,
+		WriteTimeout: config.WriteTimeout,
+		IdleTimeout:  config.IdleTimeout,
 	}
 }
 
-// IP responds with the remote IP and common headers for the actual IP.
-// Note: RemoteAddr may not be the actual remote IP if a proxy, load balancer,
-// or similar is used to route the request.
-func (h Handler) IP(w http.ResponseWriter, r *http.Request) {
-	fmt.Fprintf(w, "RemoteAddr: %v\n", r.RemoteAddr)
-
-	headers := []string{
-		"Cf-Connecting-Ip",
-		"X-Client-Ip",
-		"X-Forwarded-For",
-		"X-Real-Ip",
-	}
-
-	for _, header := range headers {
-		val := r.Header.Get(header)
-		if val != "" {
-			fmt.Fprintf(w, "%s: %v\n", header, val)
-		}
-	}
-}
-
-// Request dumps the HTTP request details.
-func (h Handler) Request(w http.ResponseWriter, r *http.Request) {
-	b, err := httputil.DumpRequest(r, true)
+// runServer starts the HTTP server and handles graceful shutdown.
+func runServer(srv *http.Server, ctx context.Context) {
+	ln, err := net.Listen("tcp", srv.Addr)
 	if err != nil {
-		http.Error(w,
-			fmt.Sprintf("Error:\n%v\n", err),
-			http.StatusInternalServerError,
-		)
-		slog.Error("DumpRequest", "err", err)
-		return
+		slog.Error("failed to listen", "err", err)
+		os.Exit(EXIT_SERVER)
 	}
 
-	fmt.Fprintln(w, string(b))
+	go func() {
+		err := srv.Serve(ln)
+		if err != nil && err != http.ErrServerClosed {
+			slog.Error("failed to serve", "err", err)
+			os.Exit(EXIT_SERVER)
+		}
+	}()
+
+	slog.Info("started server", slog.String("addr", ln.Addr().String()))
+
+	sigChan := make(chan os.Signal, 1)
+	signal.Notify(sigChan)
+
+	select {
+	case sig := <-sigChan:
+		signal.Stop(sigChan)
+
+		slog.Info("shutting down server", "signal", sig)
+
+		timeoutCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
+		defer cancel()
+
+		err := srv.Shutdown(timeoutCtx)
+		if err != nil {
+			slog.Error("server shutdown error", "err", err)
+		}
+
+		slog.Info("server shutdown")
+	case <-ctx.Done():
+	}
 }
 
 func main() {
-	// Define a flag for the address
-	addr := flag.String("addr", ":8080", "address (host:port) to listen on")
+	// define command-line flags
+	addrFlag := flag.String("addr", ":8080", "[host]:port")
+	logFileFlag := flag.String("logfile", "", "log file")
+	logLevelFlag := flag.String("loglevel", "Info", "log level")
+	logTypeFlag := flag.String("logtype", "json", "log type (json|text)")
+
+	// parse command-line flags
 	flag.Parse()
 
-	var h Handler
+	// get slog.Level from flag
+	logLevel, err := LogLevel(*logLevelFlag)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "%v\n", err)
+		fmt.Fprintf(os.Stderr, "valid loglevels: %s\n", LogLevels())
+		flag.Usage()
+		os.Exit(EXIT_USAGE)
+	}
+
+	// validate logtype
+	if !slices.Contains(validLogTypes, *logTypeFlag) {
+		fmt.Fprintf(os.Stderr, "invalid logtype: %v\n", *logTypeFlag)
+		fmt.Fprintf(os.Stderr, "valid logtypes: %s\n", strings.Join(validLogTypes, ", "))
+		flag.Usage()
+		os.Exit(EXIT_USAGE)
+	}
+
+	// check for additional command-line arguments
+	if flag.NArg() > 0 {
+		flag.Usage()
+		os.Exit(EXIT_USAGE)
+	}
+
+	err = InitLog(*logFileFlag, *logTypeFlag, logLevel, false)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "%v\n", err)
+		os.Exit(EXIT_LOG)
+	}
+
+	serverConfig := ServerConfig{
+		Addr:         *addrFlag,
+		ReadTimeout:  5 * time.Second,
+		WriteTimeout: 10 * time.Second,
+		IdleTimeout:  120 * time.Second,
+	}
+
+	h := Handler{}
 
 	mux := http.NewServeMux()
 
-	mux.Handle("/", h.logger(http.HandlerFunc(h.Root)))
-	mux.Handle("/hello", h.logger(http.HandlerFunc(h.Hello)))
-	mux.Handle("/headers", h.logger(http.HandlerFunc(h.Headers)))
-	mux.Handle("/ip", h.logger(http.HandlerFunc(h.IP)))
-	mux.Handle("/request", h.logger(http.HandlerFunc(h.Request)))
+	// add routes with logging
+	mux.HandleFunc("/", h.Root)
+	mux.HandleFunc("/hello", h.Hello)
+	mux.HandleFunc("/headers", h.Headers)
+	mux.HandleFunc("/remote", h.RemoteAddr)
+	mux.HandleFunc("/request", h.Request)
 
-	slog.Info("starting server", slog.String("addr", *addr))
-
-	err := http.ListenAndServe(*addr, mux)
-	if errors.Is(err, http.ErrServerClosed) {
-		slog.Info("server closed")
-	} else if err != nil {
-		slog.Error("failed to start", "err", err)
-		os.Exit(1)
-	}
+	ctx := context.Background()
+	srv := createServer(serverConfig, h.AddRequestID(h.LogRequest(mux)))
+	runServer(srv, ctx)
 }

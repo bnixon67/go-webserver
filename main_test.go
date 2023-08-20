@@ -2,16 +2,31 @@ package main
 
 import (
 	_ "embed"
+	"log/slog"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"sort"
 	"strings"
 	"testing"
 )
 
-//go:embed testdata/hello.html
+//go:embed html/root.html
 var helloHtml string
 
+// TestMain sets up the logger and then invocates all the tests.
+func TestMain(m *testing.M) {
+	// configure logger
+	opts := &slog.HandlerOptions{
+		Level: slog.LevelDebug,
+	}
+	logger := slog.New(slog.NewJSONHandler(os.Stderr, opts))
+	slog.SetDefault(logger)
+
+	os.Exit(m.Run())
+}
+
+// TestRootHandler tests the Root handler.
 func TestRootHandler(t *testing.T) {
 	handler := Handler{}
 
@@ -65,6 +80,7 @@ func TestRootHandler(t *testing.T) {
 	}
 }
 
+// TestheadersHandler tests the Headers handler.
 func TestHeadersHandler(t *testing.T) {
 	handler := Handler{}
 
@@ -227,7 +243,7 @@ func TestIPHandler(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			rr := httptest.NewRecorder()
-			handler.IP(rr, tc.request)
+			handler.RemoteAddr(rr, tc.request)
 
 			if rr.Code != tc.expectedStatus {
 				t.Errorf("expected status code %d, got %d", tc.expectedStatus, rr.Code)
