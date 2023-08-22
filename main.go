@@ -23,6 +23,7 @@ import (
 	"os/signal"
 	"slices"
 	"strings"
+	"syscall"
 	"time"
 )
 
@@ -70,7 +71,7 @@ func runServer(srv *http.Server, ctx context.Context) {
 	slog.Info("started server", slog.String("addr", ln.Addr().String()))
 
 	sigChan := make(chan os.Signal, 1)
-	signal.Notify(sigChan)
+	signal.Notify(sigChan, os.Interrupt, syscall.SIGTERM)
 
 	select {
 	case sig := <-sigChan:
