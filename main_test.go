@@ -180,11 +180,10 @@ func TestHelloHandler(t *testing.T) {
 			expectedCacheCtl: "no-cache, no-store, must-revalidate",
 		},
 		{
-			name:             "POST request",
-			method:           http.MethodPost,
-			expectedStatus:   http.StatusOK,
-			expectedBody:     "hello",
-			expectedCacheCtl: "no-cache, no-store, must-revalidate",
+			name:           "POST request",
+			method:         http.MethodPost,
+			expectedStatus: http.StatusMethodNotAllowed,
+			expectedBody:   http.MethodPost + " " + http.StatusText(http.StatusMethodNotAllowed),
 		},
 		// Add more test cases as needed
 	}

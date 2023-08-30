@@ -28,12 +28,17 @@ type Handler struct{}
 var rootHTML string
 
 // Root handles the root ("/") route.
-func (h Handler) Root(w http.ResponseWriter, r *http.Request) {
+func (h *Handler) Root(w http.ResponseWriter, r *http.Request) {
 	logger := Logger(r.Context())
 	logger.Debug("Root Handler")
 
+	if !ValidMethod(w, r, http.MethodGet) {
+		logger.Error("invalid method")
+		return
+	}
+
 	if r.URL.Path != "/" {
-		logger.Warn("invalid path")
+		logger.Error("invalid path")
 		http.NotFound(w, r)
 		return
 	}
@@ -43,9 +48,14 @@ func (h Handler) Root(w http.ResponseWriter, r *http.Request) {
 }
 
 // Hello responds with a simple "hello" message.
-func (h Handler) Hello(w http.ResponseWriter, r *http.Request) {
+func (h *Handler) Hello(w http.ResponseWriter, r *http.Request) {
 	logger := Logger(r.Context())
 	logger.Debug("Hello Handler")
+
+	if !ValidMethod(w, r, http.MethodGet) {
+		logger.Error("invalid method")
+		return
+	}
 
 	// try and force client not to cache content
 	w.Header().Set("Cache-Control", "no-cache, no-store, must-revalidate")
@@ -54,7 +64,7 @@ func (h Handler) Hello(w http.ResponseWriter, r *http.Request) {
 }
 
 // Headers prints the headers of the request in sorted order.
-func (h Handler) Headers(w http.ResponseWriter, r *http.Request) {
+func (h *Handler) Headers(w http.ResponseWriter, r *http.Request) {
 	logger := Logger(r.Context())
 	logger.Debug("Headers Handler")
 
@@ -76,7 +86,7 @@ func (h Handler) Headers(w http.ResponseWriter, r *http.Request) {
 
 // RemoteAddr responds with the RemoteAddr and common headers for the actual RemoteAddr.
 // Note: RemoteAddr may not be valid if a proxy, load balancer, or similar is used to route the request.
-func (h Handler) RemoteAddr(w http.ResponseWriter, r *http.Request) {
+func (h *Handler) RemoteAddr(w http.ResponseWriter, r *http.Request) {
 	logger := Logger(r.Context())
 	logger.Debug("Headers Handler")
 
@@ -99,7 +109,7 @@ func (h Handler) RemoteAddr(w http.ResponseWriter, r *http.Request) {
 }
 
 // Request dumps the HTTP request details.
-func (h Handler) Request(w http.ResponseWriter, r *http.Request) {
+func (h *Handler) Request(w http.ResponseWriter, r *http.Request) {
 	logger := Logger(r.Context())
 	logger.Debug("Headers Handler")
 

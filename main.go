@@ -142,7 +142,6 @@ func main() {
 
 	mux := http.NewServeMux()
 
-	// add routes with logging
 	mux.HandleFunc("/", h.Root)
 	mux.HandleFunc("/hello", h.Hello)
 	mux.HandleFunc("/headers", h.Headers)
