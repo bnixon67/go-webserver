@@ -12,7 +12,7 @@ import (
 )
 
 //go:embed html/root.html
-var helloHtml string
+var helloHTML string
 
 // TestMain sets up the logger and then invocates all the tests.
 func TestMain(m *testing.M) {
@@ -41,7 +41,7 @@ func TestRootHandler(t *testing.T) {
 			name:         "Root path",
 			path:         "/",
 			expectedCode: http.StatusOK,
-			expectedBody: strings.TrimSpace(helloHtml),
+			expectedBody: strings.TrimSpace(helloHTML),
 		},
 		{
 			name:         "Non-root path",

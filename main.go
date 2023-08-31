@@ -28,9 +28,9 @@ import (
 )
 
 const (
-	EXIT_SERVER = 1
-	EXIT_USAGE  = 2
-	EXIT_LOG    = 3
+	ExitServer = 1 // ExitServer indicates a server error.
+	ExitUsage  = 2 // ExitUsage indicates a usage error.
+	ExitLog    = 3 // ExitLog indicates a log error.
 )
 
 // ServerConfig holds configuration options for the HTTP server.
@@ -53,18 +53,18 @@ func createServer(config ServerConfig, handler http.Handler) *http.Server {
 }
 
 // runServer starts the HTTP server and handles graceful shutdown.
-func runServer(srv *http.Server, ctx context.Context) {
+func runServer(ctx context.Context, srv *http.Server) {
 	ln, err := net.Listen("tcp", srv.Addr)
 	if err != nil {
 		slog.Error("failed to listen", "err", err)
-		os.Exit(EXIT_SERVER)
+		os.Exit(ExitServer)
 	}
 
 	go func() {
 		err := srv.Serve(ln)
 		if err != nil && err != http.ErrServerClosed {
 			slog.Error("failed to serve", "err", err)
-			os.Exit(EXIT_SERVER)
+			os.Exit(ExitServer)
 		}
 	}()
 
@@ -108,7 +108,7 @@ func main() {
 		fmt.Fprintf(os.Stderr, "%v\n", err)
 		fmt.Fprintf(os.Stderr, "valid loglevels: %s\n", LogLevels())
 		flag.Usage()
-		os.Exit(EXIT_USAGE)
+		os.Exit(ExitUsage)
 	}
 
 	// validate logtype
@@ -116,19 +116,19 @@ func main() {
 		fmt.Fprintf(os.Stderr, "invalid logtype: %v\n", *logTypeFlag)
 		fmt.Fprintf(os.Stderr, "valid logtypes: %s\n", strings.Join(validLogTypes, ", "))
 		flag.Usage()
-		os.Exit(EXIT_USAGE)
+		os.Exit(ExitUsage)
 	}
 
 	// check for additional command-line arguments
 	if flag.NArg() > 0 {
 		flag.Usage()
-		os.Exit(EXIT_USAGE)
+		os.Exit(ExitUsage)
 	}
 
 	err = InitLog(*logFileFlag, *logTypeFlag, logLevel, false)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "%v\n", err)
-		os.Exit(EXIT_LOG)
+		os.Exit(ExitLog)
 	}
 
 	serverConfig := ServerConfig{
@@ -150,5 +150,5 @@ func main() {
 
 	ctx := context.Background()
 	srv := createServer(serverConfig, h.AddRequestID(h.LogRequest(mux)))
-	runServer(srv, ctx)
+	runServer(ctx, srv)
 }
