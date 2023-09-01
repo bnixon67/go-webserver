@@ -131,6 +131,9 @@ func main() {
 		os.Exit(ExitLog)
 	}
 
+	dt, err := ExecutableDateTime()
+	slog.Info("executable", "time", dt)
+
 	serverConfig := ServerConfig{
 		Addr:         *addrFlag,
 		ReadTimeout:  5 * time.Second,
@@ -147,6 +150,7 @@ func main() {
 	mux.HandleFunc("/headers", h.Headers)
 	mux.HandleFunc("/remote", h.RemoteAddr)
 	mux.HandleFunc("/request", h.Request)
+	mux.HandleFunc("/build", h.Build)
 
 	ctx := context.Background()
 	srv := createServer(serverConfig, h.AddRequestID(h.LogRequest(mux)))

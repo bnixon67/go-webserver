@@ -2,8 +2,10 @@ package main
 
 import (
 	"net/http"
+	"os"
 	"slices"
 	"strings"
+	"time"
 )
 
 // ValidMethod checks if the given HTTP request method is allowed based on
@@ -36,4 +38,23 @@ func ValidMethod(w http.ResponseWriter, r *http.Request, allowed ...string) bool
 	txt := r.Method + " " + http.StatusText(http.StatusMethodNotAllowed)
 	http.Error(w, txt, http.StatusMethodNotAllowed)
 	return false
+}
+
+// ExecutableDateTime returns the modification date/time of the executable file.
+func ExecutableDateTime() (time.Time, error) {
+	var time time.Time
+
+	// Get the path of the executable
+	executablePath, err := os.Executable()
+	if err != nil {
+		return time, err
+	}
+
+	// Get file information
+	fileInfo, err := os.Stat(executablePath)
+	if err != nil {
+		return time, err
+	}
+
+	return fileInfo.ModTime(), nil
 }

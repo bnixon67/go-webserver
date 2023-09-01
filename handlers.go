@@ -126,3 +126,20 @@ func (h *Handler) Request(w http.ResponseWriter, r *http.Request) {
 
 	fmt.Fprintln(w, string(b))
 }
+
+// Build responds with the executable modification date and time.
+func (h *Handler) Build(w http.ResponseWriter, r *http.Request) {
+	logger := Logger(r.Context())
+	logger.Debug("Headers Handler")
+
+	if !ValidMethod(w, r, http.MethodGet) {
+		logger.Error("invalid method")
+		return
+	}
+
+	// try and force client not to cache content
+	w.Header().Set("Cache-Control", "no-cache, no-store, must-revalidate")
+
+	dt, _ := ExecutableDateTime()
+	fmt.Fprintf(w, "ExecutableDateTime: %v\n", dt.Format("2006-01-02 15:04:05"))
+}
