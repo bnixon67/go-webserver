@@ -132,7 +132,7 @@ func main() {
 	}
 
 	dt, err := ExecutableDateTime()
-	slog.Info("executable", "time", dt)
+	slog.Info("executable", "time", dt, "error", err)
 
 	serverConfig := ServerConfig{
 		Addr:         *addrFlag,
