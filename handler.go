@@ -17,13 +17,13 @@ import (
 	"html/template"
 )
 
-// Handler is responsible for handling HTTP requests.
+// Handler encapsulates the behavior for processing HTTP requests.
 type Handler struct {
-	AppName string
-	Tmpl    *template.Template
+	AppName string             // AppName is the name of the application using this handler.
+	Tmpl    *template.Template // Tmpl holds the parsed templates to be rendered.
 }
 
-// NewHandler creates and initializes a new Handler instance.
+// NewHandler returns a new Handler instance with the given application name and template.
 func NewHandler(appName string, tmpl *template.Template) *Handler {
 	return &Handler{AppName: appName, Tmpl: tmpl}
 }

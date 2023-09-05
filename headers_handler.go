@@ -50,6 +50,7 @@ func NewHeaderInfo(httpHeader http.Header) []HeaderInfo {
 func (h *Handler) HeadersHandler(w http.ResponseWriter, r *http.Request) {
 	// get the logger from the context, which include request information
 	logger := Logger(r.Context())
+	logger.Info("HeadersHandler", "header", r.Header)
 
 	// check for valid methods
 	if !ValidMethod(w, r, http.MethodGet) {

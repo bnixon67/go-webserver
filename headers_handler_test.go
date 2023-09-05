@@ -46,10 +46,18 @@ func TestHeadersHandler(t *testing.T) {
 			name: "Empty headers",
 		},
 		{
-			name: "Multiple headers",
+			name: "Typical headers",
 			headers: http.Header{
 				"Content-Type":    {"application/json"},
 				"X-Custom-Header": {"value"},
+				"Accept-Encoding": {"gzip"},
+			},
+		},
+		{
+			name: "Multiple header values",
+			headers: http.Header{
+				"Content-Type":    {"application/json"},
+				"X-Custom-Header": {"value1", "value2"},
 				"Accept-Encoding": {"gzip"},
 			},
 		},
