@@ -18,16 +18,6 @@ import (
 	"net/http"
 )
 
-// RealIP returns the real IP address from the request headers or RemoteAddr.
-func RealIP(r *http.Request) string {
-	realIP := r.Header.Get("X-Real-IP")
-	if realIP == "" {
-		realIP = r.RemoteAddr
-	}
-
-	return realIP
-}
-
 // LoggerKey is used as a context key for the custom logger.
 type LoggerKey int
 
@@ -46,21 +36,29 @@ func (h Handler) LogRequest(next http.Handler) http.Handler {
 		))
 		logger.Info("LogRequest")
 
-		// add new Logger to context
+		// add new logger to context
 		ctx := context.WithValue(r.Context(), loggerKey, logger)
 
+		// server the request with the updated context
 		next.ServeHTTP(w, r.WithContext(ctx))
 	})
 }
 
 // Logger returns the custom logger if present, otherwise default logger.
 func Logger(ctx context.Context) *slog.Logger {
+	// if context is nil, return the default logger.
 	if ctx == nil {
 		return slog.Default()
 	}
+
+	// attempt to retrieve the logger from the context using the loggerKey
 	logger, ok := ctx.Value(loggerKey).(*slog.Logger)
+
+	// if the logger is not present in the context or has an incorrect type, return the default logger.
 	if !ok {
 		return slog.Default()
 	}
+
+	// return the custom logger from the context
 	return logger
 }

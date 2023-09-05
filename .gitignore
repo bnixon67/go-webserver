@@ -5,3 +5,6 @@ nohup.out
 *.service
 *.swp
 *.exe
+coverage.html
+coverage.out
+*.json

@@ -1,38 +1,68 @@
+/*
+Copyright 2023 Bill Nixon
+
+Licensed under the Apache License, Version 2.0 (the "License"); you may not use
+this file except in compliance with the License.  You may obtain a copy of the
+License at http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software distributed
+under the License is distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR
+CONDITIONS OF ANY KIND, either express or implied.  See the License for the
+specific language governing permissions and limitations under the License.
+*/
+
 package main
 
 import (
+	"bytes"
 	_ "embed"
+	"html/template"
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"os"
-	"sort"
 	"strings"
 	"testing"
 )
 
-//go:embed html/root.html
-var helloHTML string
+// handler to use across all tests.
+var handler *Handler
+
+const appName = "Test App Name"
 
 // TestMain sets up the logger and then invocates all the tests.
 func TestMain(m *testing.M) {
 	// configure logger
 	opts := &slog.HandlerOptions{
-		Level: slog.LevelDebug,
+		//Level:     slog.LevelDebug,
+		AddSource: true,
 	}
 	logger := slog.New(slog.NewJSONHandler(os.Stderr, opts))
 	slog.SetDefault(logger)
 
+	// initialize templates
+	tmpl, err := InitTemplates("html/*.html")
+	if err != nil {
+		slog.Error("failed to InitTemplates", "err", err)
+	}
+
+	handler = NewHandler(appName, tmpl)
+
 	os.Exit(m.Run())
 }
 
+//go:embed html/root.html
+var rootHTML string
+
 // TestRootHandler tests the Root handler.
 func TestRootHandler(t *testing.T) {
-	handler := Handler{}
+	var goodBody bytes.Buffer
+	template.Must(template.New("test").Parse(rootHTML)).Execute(&goodBody, RootPageData{Title: appName})
 
 	tests := []struct {
 		name             string
 		path             string
+		method           string
 		expectedCode     int
 		expectedBody     string
 		expectedLocation string
@@ -40,26 +70,36 @@ func TestRootHandler(t *testing.T) {
 		{
 			name:         "Root path",
 			path:         "/",
+			method:       http.MethodGet,
 			expectedCode: http.StatusOK,
-			expectedBody: strings.TrimSpace(helloHTML),
+			expectedBody: goodBody.String(),
 		},
 		{
 			name:         "Non-root path",
 			path:         "/other",
+			method:       http.MethodGet,
 			expectedCode: http.StatusNotFound,
 			expectedBody: "404 page not found",
+		},
+		{
+			name:         "Invalid method",
+			path:         "/",
+			method:       http.MethodPut,
+			expectedCode: http.StatusMethodNotAllowed,
+			expectedBody: http.MethodPut + " " + http.StatusText(http.StatusMethodNotAllowed),
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			req, err := http.NewRequest(http.MethodGet, tt.path, nil)
+			req, err := http.NewRequest(tt.method, tt.path, nil)
 			if err != nil {
 				t.Fatal(err)
 			}
 
 			rr := httptest.NewRecorder()
-			handler.Root(rr, req)
+
+			handler.RootHandler(rr, req)
 
 			if rr.Code != tt.expectedCode {
 				t.Errorf("expected status code %d, got %d", tt.expectedCode, rr.Code)
@@ -78,90 +118,6 @@ func TestRootHandler(t *testing.T) {
 			}
 		})
 	}
-}
-
-// TestheadersHandler tests the Headers handler.
-func TestHeadersHandler(t *testing.T) {
-	handler := Handler{}
-
-	tests := []struct {
-		name         string
-		headers      map[string]string
-		expectedKeys []string
-	}{
-		{
-			name: "Empty headers",
-			headers: map[string]string{
-				"Content-Type": "application/json",
-			},
-			expectedKeys: []string{"Content-Type"},
-		},
-		{
-			name: "Multiple headers",
-			headers: map[string]string{
-				"Content-Type":    "application/json",
-				"X-Custom-Header": "value",
-				"Accept-Encoding": "gzip",
-			},
-			expectedKeys: []string{"Accept-Encoding", "Content-Type", "X-Custom-Header"},
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			req, err := http.NewRequest(http.MethodGet, "/", nil)
-			if err != nil {
-				t.Fatal(err)
-			}
-
-			for key, value := range tt.headers {
-				req.Header.Add(key, value)
-			}
-
-			rr := httptest.NewRecorder()
-			handler.Headers(rr, req)
-
-			if rr.Code != http.StatusOK {
-				t.Errorf("expected status code %d, got %d", http.StatusOK, rr.Code)
-			}
-
-			response := rr.Body.String()
-			keys := extractKeysFromResponse(response)
-
-			if !stringSlicesEqual(tt.expectedKeys, keys) {
-				t.Errorf("expected headers keys %v, got %v", tt.expectedKeys, keys)
-			}
-		})
-	}
-}
-
-func extractKeysFromResponse(response string) []string {
-	lines := strings.Split(response, "\n")
-	keys := make([]string, 0)
-
-	for _, line := range lines {
-		parts := strings.SplitN(line, ":", 2)
-		if len(parts) == 2 {
-			keys = append(keys, strings.TrimSpace(parts[0]))
-		}
-	}
-
-	sort.Strings(keys)
-	return keys
-}
-
-func stringSlicesEqual(a, b []string) bool {
-	if len(a) != len(b) {
-		return false
-	}
-
-	for i := range a {
-		if a[i] != b[i] {
-			return false
-		}
-	}
-
-	return true
 }
 
 func TestHelloHandler(t *testing.T) {
@@ -185,10 +141,7 @@ func TestHelloHandler(t *testing.T) {
 			expectedStatus: http.StatusMethodNotAllowed,
 			expectedBody:   http.MethodPost + " " + http.StatusText(http.StatusMethodNotAllowed),
 		},
-		// Add more test cases as needed
 	}
-
-	handler := Handler{}
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -198,7 +151,7 @@ func TestHelloHandler(t *testing.T) {
 			}
 
 			rr := httptest.NewRecorder()
-			handler.Hello(rr, req)
+			handler.HelloHandler(rr, req)
 
 			if rr.Code != tc.expectedStatus {
 				t.Errorf("expected status code %d, got %d", tc.expectedStatus, rr.Code)
@@ -234,15 +187,12 @@ func TestIPHandler(t *testing.T) {
 			expectedStatus: http.StatusOK,
 			expectedBody:   "RemoteAddr: 127.0.0.1:1234",
 		},
-		// Add more test cases as needed
 	}
-
-	handler := Handler{}
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			rr := httptest.NewRecorder()
-			handler.RemoteAddr(rr, tc.request)
+			handler.RemoteHandler(rr, tc.request)
 
 			if rr.Code != tc.expectedStatus {
 				t.Errorf("expected status code %d, got %d", tc.expectedStatus, rr.Code)
@@ -272,15 +222,12 @@ func TestRequestHandler(t *testing.T) {
 			expectedStatus: http.StatusOK,
 			expectedBody:   "GET /request HTTP/1.1",
 		},
-		// Add more test cases as needed
 	}
-
-	handler := Handler{}
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			rr := httptest.NewRecorder()
-			handler.Request(rr, tc.request)
+			handler.RequestHandler(rr, tc.request)
 
 			if rr.Code != tc.expectedStatus {
 				t.Errorf("expected status code %d, got %d", tc.expectedStatus, rr.Code)

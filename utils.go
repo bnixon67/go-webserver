@@ -14,9 +14,6 @@ import (
 // function updates the response writer appropriately and returns false.  The
 // calling handler should return without further processing.
 func ValidMethod(w http.ResponseWriter, r *http.Request, allowed ...string) bool {
-	logger := Logger(r.Context())
-	logger.Debug("ValidMethod", "allowed", allowed)
-
 	// if method is in allowed list, then return
 	if slices.Contains(allowed, r.Method) {
 		return true
@@ -57,4 +54,14 @@ func ExecutableDateTime() (time.Time, error) {
 	}
 
 	return fileInfo.ModTime(), nil
+}
+
+// RealIP returns the real IP address from the request headers or RemoteAddr.
+func RealIP(r *http.Request) string {
+	realIP := r.Header.Get("X-Real-IP")
+	if realIP == "" {
+		realIP = r.RemoteAddr
+	}
+
+	return realIP
 }
