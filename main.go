@@ -22,6 +22,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"slices"
 	"strings"
 	"syscall"
@@ -96,8 +97,9 @@ func runServer(ctx context.Context, srv *http.Server) {
 
 func main() {
 	// define command-line flags
-	addrFlag := flag.String("addr", "localhost:8080", "[host]:port")
+	addrFlag := flag.String("addr", ":8080", "[host]:port")
 	logFileFlag := flag.String("logfile", "", "log file")
+	htmlDirFlag := flag.String("html", "html", "html directory")
 	logLevelFlag := flag.String("loglevel", "Info", "log level")
 	logTypeFlag := flag.String("logtype", "json", "log type (json|text)")
 	logAddSource := flag.Bool("logsource", false, "log source code position")
@@ -136,7 +138,7 @@ func main() {
 	}
 
 	// initialize templates
-	tmpl, err := InitTemplates("html/*.html")
+	tmpl, err := InitTemplates(filepath.Join(*htmlDirFlag, "*.html"))
 	if err != nil {
 		slog.Error("failed to InitTemplates", "err", err)
 		os.Exit(ExitTemplate)
