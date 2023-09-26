@@ -1,28 +1,41 @@
 #!/bin/sh
 #
+# go_webserver.sh - A script to manage the Go web server as a service.
+#
 # PROVIDE: go_webserver
 # REQUIRE: LOGIN NETWORKING
-# KEYWORD: 
+# KEYWORD:
+#
 
+# Load the rc.subr script for service management
 . /etc/rc.subr
 
-# name uses an underscore ("_") to conform with sh variable naming
+# Service name - uses underscore rather than hypen to avoid shell variable name conflicts
 name="go_webserver"
+# rc value to enable/disable the service
 rcvar="${name}_enable"
 
+# User to run the web server as
 go_webserver_user="ec2-user"
+# Base directory of the web server
 go_webserver_dir="/home/ec2-user/src/go-webserver"
+# Command to run the web server
 go_webserver_command="${go_webserver_dir}/go-webserver"
+# Command arguments for the web server
 go_webserver_command_args="-html ${go_webserver_dir}/html -logfile ${go_webserver_dir}/go-webserver.log -addr localhost:8080"
 
+# Location of the PID file
 pidfile="/var/run/${name}/${name}.pid"
 
+# Define the command to start the service as a daemon
 command="/usr/sbin/daemon"
 command_args="-P ${pidfile} -r -f ${go_webserver_command} ${go_webserver_command_args}"
 
+# Load the rc configuration for this service
 load_rc_config $name
 
-# default to not enabled
+# Default to not enabled
 : ${go_webserver_enable:="NO"}
 
+# Run the requested RC command (e.g., start, stop) based on the argument passed to the script
 run_rc_command "$1"
