@@ -8,3 +8,4 @@ nohup.out
 coverage.html
 coverage.out
 *.json
+cert/

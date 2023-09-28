@@ -56,7 +56,7 @@ func createServer(config ServerConfig, handler http.Handler) *http.Server {
 }
 
 // runServer starts the HTTP server and handles graceful shutdown.
-func runServer(ctx context.Context, srv *http.Server) {
+func runServer(ctx context.Context, srv *http.Server, certFile, keyFile string) {
 	ln, err := net.Listen("tcp", srv.Addr)
 	if err != nil {
 		slog.Error("failed to listen", "err", err)
@@ -64,7 +64,11 @@ func runServer(ctx context.Context, srv *http.Server) {
 	}
 
 	go func() {
-		err := srv.Serve(ln)
+		if certFile != "" && keyFile != "" {
+			err = srv.ServeTLS(ln, certFile, keyFile)
+		} else {
+			err = srv.Serve(ln)
+		}
 		if err != nil && err != http.ErrServerClosed {
 			slog.Error("failed to serve", "err", err)
 			os.Exit(ExitServer)
@@ -103,6 +107,8 @@ func main() {
 	logLevelFlag := flag.String("loglevel", "Info", "log level")
 	logTypeFlag := flag.String("logtype", "json", "log type (json|text)")
 	logAddSource := flag.Bool("logsource", false, "log source code position")
+	certFileFlag := flag.String("certfile", "", "certificate file")
+	keyFileFlag := flag.String("keyfile", "", "private key file")
 
 	// parse command-line flags
 	flag.Parse()
@@ -163,5 +169,5 @@ func main() {
 		IdleTimeout:  120 * time.Second,
 	}
 	srv := createServer(serverConfig, h.AddRequestID(h.LogRequest(mux)))
-	runServer(ctx, srv)
+	runServer(ctx, srv, *certFileFlag, *keyFileFlag)
 }

@@ -22,7 +22,7 @@ go_webserver_dir="/home/ec2-user/src/go-webserver"
 # Command to run the web server
 go_webserver_command="${go_webserver_dir}/go-webserver"
 # Command arguments for the web server
-go_webserver_command_args="-html ${go_webserver_dir}/html -logfile ${go_webserver_dir}/go-webserver.log -addr localhost:8080"
+go_webserver_command_args="-html ${go_webserver_dir}/html -logfile ${go_webserver_dir}/go-webserver.log -addr localhost:8080 -certfile ${go_webserver_dir}/cert/server.crt -keyfile ${go_webserver_dir}/cert/server.key"
 
 # Location of the PID file
 pidfile="/var/run/${name}/${name}.pid"
