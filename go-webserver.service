@@ -1,0 +1,13 @@
+[Unit]
+Description=Go Webserver
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+WorkingDirectory=/home/ec2-user/src/go-webserver
+ExecStart=/home/ec2-user/src/go-webserver/go-webserver -addr :8080 -certfile cert/server.crt -keyfile cert/server.key -logfile go-webserver.log
+User=ec2-user
+Restart=always
+
+[Install]
+WantedBy=multi-user.target

@@ -2,7 +2,6 @@ go-webserver
 nohup.out
 *~
 *.log
-*.service
 *.swp
 *.exe
 coverage.html
